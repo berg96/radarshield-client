@@ -1,14 +1,19 @@
 # RadarShield client — UI spec (designer handoff 2026-06-05)
 
-Source prototype: `docs/design/prototype/` (React board, run via `RadarShield Client.html`).
+Source prototype: `design/prototype/` (React board, run via `RadarShield Client.html`).
 This doc is the Flutter implementation contract derived from it.
 
 ## Core idea
 Radical simplicity: **one big button on the whole screen** — "нажал → работает".
 Connection status is read by button **colour**. Everything technical is hidden
-behind "продвинутый режим", which is simply the **existing FlClash UI** (the
-prototype's advanced screen is literally labelled "FLClash"). So we build a thin
-simple shell in front of FlClash; we do NOT rebuild proxy/profile/route screens.
+behind simple secondary screens.
+
+> ⚠️ Updated 2026-06-05: the prototype's "advanced mode" opened the raw FlClash UI.
+> That was reverted — we do NOT show FlClash's interface at all. Every feature a
+> user might need is redrawn in our style. The own "advanced" screens to design
+> (server picker, connection details, diagnostics, split-tunnel, extra settings
+> toggles) and what we deliberately drop are specified in `design/BRIEF-advanced.md`
+> (handed back to the designer).
 
 ## Design tokens (from `frame.jsx`)
 Dark navy theme.
