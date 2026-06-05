@@ -1,21 +1,26 @@
-// RadarShield main screen — the one-button centerpiece.
-// Self-contained dark "navy" look so it renders correctly regardless of the
-// app ThemeData. Wired to the real core: isStartProvider / coreStatusProvider /
-// runTimeProvider, toggled via setupAction.updateStatus (same path as the stock
-// StartButton). Design source: design/SPEC.md + design/prototype.
+// RadarShield — own full-screen shell: one-button main + onboarding + our own
+// advanced screens (settings / location / diagnostics / connection details),
+// navigated by an internal view stack so the FlClash chrome never shows.
+// Design source: design/prototype (v2). Wired to the real core via the same
+// providers/actions the stock FlClash screens use.
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:fl_clash/views/proxies/common.dart' show delayTest;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ── brand tokens (design/SPEC.md) ────────────────────────────────
+// ── brand tokens (design/prototype frame.jsx) ────────────────────
 class _RS {
   static const navy = Color(0xFF0D1B2A);
+  static const navy2 = Color(0xFF0B1622);
   static const panel = Color(0xFF12243A);
+  static const panel2 = Color(0xFF16304D);
   static const line = Color(0x14FFFFFF); // white 8%
+  static const line2 = Color(0x24FFFFFF); // white 14%
   static const ink = Color(0xFFEEF3F9);
   static const dim = Color(0xFFB7C4D3);
   static const mute = Color(0xFF7F8FA3);
@@ -23,9 +28,13 @@ class _RS {
   static const off = Color(0xFF7C8BA0);
   static const connecting = Color(0xFFFFB703);
   static const connected = Color(0xFF2FC98A);
+  static const error = Color(0xFFF4736B);
 }
 
 enum _PowerState { off, connecting, connected }
+
+// internal screen stack (our own, no FlClash nav)
+enum _RSView { home, settings, location, diagnostics }
 
 class RadarShieldMainScreen extends ConsumerStatefulWidget {
   const RadarShieldMainScreen({super.key});
@@ -38,6 +47,13 @@ class RadarShieldMainScreen extends ConsumerStatefulWidget {
 class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
+  final TextEditingController _subCtrl = TextEditingController();
+
+  _RSView _view = _RSView.home;
+  // local-only UI toggles (visual; wiring to core behaviour comes later)
+  bool _autoConnect = false;
+  bool _killSwitch = false;
+  bool _statusNotif = true;
 
   @override
   void initState() {
@@ -46,13 +62,17 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+    _subCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _pulse.dispose();
+    _subCtrl.dispose();
     super.dispose();
   }
+
+  void _go(_RSView v) => setState(() => _view = v);
 
   _PowerState _resolveState(bool isStart, CoreStatus status) {
     if (status == CoreStatus.connecting) return _PowerState.connecting;
@@ -72,13 +92,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   }
 
   void _toggle(bool hasProfile) {
-    if (!hasProfile) {
-      // No subscription yet → route to the Profiles page so the user can paste
-      // their sub-link. This is the interim onboarding path until a dedicated
-      // onboarding / zero-config flow lands.
-      ref.read(currentPageLabelProvider.notifier).toPage(PageLabel.profiles);
-      return;
-    }
+    if (!hasProfile) return;
     final next = !ref.read(isStartProvider);
     debouncer.call(FunctionTag.updateStatus, () {
       globalState.container
@@ -87,9 +101,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     }, duration: commonDuration);
   }
 
-  // First-run onboarding: read the sub-link from the clipboard and hand it to
-  // the canonical add flow (shows progress, lands on Profiles with the new sub).
-  Future<void> _pasteSub() async {
+  // First-run onboarding: paste the sub-link → canonical add flow.
+  Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty) {
@@ -100,19 +113,45 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
       );
       return;
     }
-    ref.read(profilesActionProvider.notifier).addProfileFormURL(text);
+    _subCtrl.text = text;
+  }
+
+  void _addSub() {
+    final url = _subCtrl.text.trim();
+    if (url.isEmpty) return;
+    ref.read(profilesActionProvider.notifier).addProfileFormURL(url);
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasProfile =
+        ref.watch(profilesProvider.select((state) => state.isNotEmpty));
+
+    if (!hasProfile) {
+      _view = _RSView.home;
+      return _onboardingView();
+    }
+
+    switch (_view) {
+      case _RSView.settings:
+        return _settingsView();
+      case _RSView.location:
+        return _locationView();
+      case _RSView.diagnostics:
+        return _diagnosticsView();
+      case _RSView.home:
+        return _homeView();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // HOME (power button)
+  // ─────────────────────────────────────────────────────────────
+  Widget _homeView() {
     final isStart = ref.watch(isStartProvider);
     final status = ref.watch(coreStatusProvider);
     final hasProfile =
         ref.watch(profilesProvider.select((state) => state.isNotEmpty));
-
-    // No subscription yet → show our own onboarding instead of the power UI.
-    if (!hasProfile) return _onboardingView();
-
     final state = _resolveState(isStart, status);
     final color = _color(state);
 
@@ -131,6 +170,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     _powerButton(state, color, () => _toggle(hasProfile)),
                     const SizedBox(height: 22),
                     _statusText(state, color),
+                    if (state == _PowerState.connected) _detailsPill(),
                     if (state == _PowerState.connected) _sessionTimer(),
                   ],
                 ),
@@ -143,18 +183,17 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     );
   }
 
-  // ── top bar: brand + corner menu ───────────────────────────────
   Widget _topBar() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
+        const Row(
           children: [
-            const _Logo(size: 24),
-            const SizedBox(width: 9),
+            _Logo(size: 24),
+            SizedBox(width: 9),
             Text(
               'RadarShield',
-              style: const TextStyle(
+              style: TextStyle(
                 color: _RS.ink,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -165,17 +204,9 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
         ),
         Row(
           children: [
-            _cornerButton(Icons.logout, () {
-              globalState.showMessage(
-                message: const TextSpan(text: 'Выход из аккаунта — скоро'),
-              );
-            }),
+            _cornerButton(Icons.logout, _confirmLogout),
             const SizedBox(width: 10),
-            _cornerButton(Icons.settings_outlined, () {
-              ref
-                  .read(currentPageLabelProvider.notifier)
-                  .toPage(PageLabel.tools);
-            }),
+            _cornerButton(Icons.settings_outlined, () => _go(_RSView.settings)),
           ],
         ),
       ],
@@ -199,7 +230,6 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     );
   }
 
-  // ── the power button ───────────────────────────────────────────
   Widget _powerButton(_PowerState state, Color color, VoidCallback onTap) {
     const size = 200.0;
     final active = state == _PowerState.connected;
@@ -216,10 +246,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
             return Stack(
               alignment: Alignment.center,
               children: [
-                // sonar rings while connecting / connected
                 if (connecting || active)
                   ..._sonarRings(size, color, connecting),
-                // connecting spinner arc
                 if (connecting)
                   SizedBox(
                     width: size + 24,
@@ -230,7 +258,6 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                       backgroundColor: color.withValues(alpha: 0.18),
                     ),
                   ),
-                // core circle (color morph)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 600),
                   curve: Curves.easeInOut,
@@ -272,9 +299,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   }
 
   List<Widget> _sonarRings(double size, Color color, bool connecting) {
-    final count = 3;
+    const count = 3;
     return List.generate(count, (i) {
-      // staggered phase per ring
       final phase = (_pulse.value + i / count) % 1.0;
       final scale = 1.0 + phase * 0.9;
       final opacity = (1.0 - phase) * 0.5;
@@ -292,7 +318,6 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     });
   }
 
-  // ── status text ────────────────────────────────────────────────
   Widget _statusText(_PowerState state, Color color) {
     final (word, sub) = switch (state) {
       _PowerState.off => ('Пуск', 'Нажмите, чтобы подключиться'),
@@ -320,6 +345,39 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
           style: const TextStyle(color: _RS.mute, fontSize: 14),
         ),
       ],
+    );
+  }
+
+  Widget _detailsPill() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: GestureDetector(
+        onTap: _showDetails,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _RS.panel,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: _RS.line),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline, size: 14, color: _RS.amber),
+              SizedBox(width: 6),
+              Text(
+                'Детали соединения',
+                style: TextStyle(
+                  color: _RS.dim,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -351,35 +409,42 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   }
 
   Widget _locationChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: _RS.panel,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _RS.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.public, size: 15, color: _RS.amber),
-          const SizedBox(width: 8),
-          Text(
-            'Россия · авто',
-            style: const TextStyle(
-              color: _RS.dim,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
+    return GestureDetector(
+      onTap: () => _go(_RSView.location),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: _RS.panel,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _RS.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.public, size: 15, color: _RS.amber),
+            const SizedBox(width: 8),
+            Text(
+              _currentServerLabel(),
+              style: const TextStyle(
+                color: _RS.dim,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
-          const Icon(Icons.chevron_right, size: 16, color: _RS.mute),
-        ],
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, size: 16, color: _RS.mute),
+          ],
+        ),
       ),
     );
   }
 
-  // ── first-run onboarding (paste subscription link) ─────────────
+  // ─────────────────────────────────────────────────────────────
+  // ONBOARDING
+  // ─────────────────────────────────────────────────────────────
   Widget _onboardingView() {
+    final filled = _subCtrl.text.trim().isNotEmpty;
     return Material(
       color: _RS.navy,
       child: SafeArea(
@@ -388,11 +453,11 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              const Row(
                 children: [
-                  const _Logo(size: 24),
-                  const SizedBox(width: 9),
-                  const Text(
+                  _Logo(size: 24),
+                  SizedBox(width: 9),
+                  Text(
                     'RadarShield',
                     style: TextStyle(
                       color: _RS.ink,
@@ -413,9 +478,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                       decoration: BoxDecoration(
                         color: _RS.amber.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: _RS.amber.withValues(alpha: 0.3),
-                        ),
+                        border:
+                            Border.all(color: _RS.amber.withValues(alpha: 0.3)),
                       ),
                       child: const Icon(Icons.link, color: _RS.amber, size: 26),
                     ),
@@ -434,38 +498,39 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     const Text(
                       'Откройте нашего бота в Telegram и скопируйте ссылку. '
                       'Вставьте её сюда — остальное сделаем сами.',
-                      style: TextStyle(
-                        color: _RS.dim,
-                        fontSize: 14.5,
-                        height: 1.5,
-                      ),
+                      style:
+                          TextStyle(color: _RS.dim, fontSize: 14.5, height: 1.5),
                     ),
+                    const SizedBox(height: 26),
+                    _subInput(filled),
                   ],
                 ),
               ),
               GestureDetector(
-                onTap: _pasteSub,
+                onTap: filled ? _addSub : null,
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color: _RS.amber,
+                    color:
+                        filled ? _RS.amber : Colors.white.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.content_paste, color: _RS.navy, size: 18),
-                      SizedBox(width: 8),
                       Text(
-                        'Вставить ссылку из буфера',
+                        'Продолжить',
                         style: TextStyle(
-                          color: _RS.navy,
+                          color: filled ? _RS.navy : _RS.mute,
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right,
+                          size: 20, color: filled ? _RS.navy : _RS.mute),
                     ],
                   ),
                 ),
@@ -492,6 +557,862 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
         ),
       ),
     );
+  }
+
+  Widget _subInput(bool filled) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      decoration: BoxDecoration(
+        color: _RS.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: filled ? _RS.amber.withValues(alpha: 0.5) : _RS.line2,
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.link, size: 18, color: _RS.mute),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _subCtrl,
+              style: const TextStyle(
+                color: _RS.ink,
+                fontSize: 14,
+                fontFamily: 'monospace',
+              ),
+              cursorColor: _RS.amber,
+              decoration: const InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: 'rs://подписка…',
+                hintStyle: TextStyle(color: _RS.mute, fontSize: 14),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _pasteFromClipboard,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: _RS.amber.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.content_paste, size: 14, color: _RS.amber),
+                  SizedBox(width: 6),
+                  Text(
+                    'Вставить',
+                    style: TextStyle(
+                      color: _RS.amber,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // shared chrome
+  // ─────────────────────────────────────────────────────────────
+  Widget _subHeader(String title, VoidCallback onBack, {Widget? action}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onBack,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _RS.panel,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: _RS.line),
+              ),
+              child: const Icon(Icons.chevron_left, size: 20, color: _RS.dim),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: _RS.ink,
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          ?action,
+        ],
+      ),
+    );
+  }
+
+  Widget _rsToggle(bool on, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 44,
+        height: 26,
+        decoration: BoxDecoration(
+          color: on ? _RS.amber : Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 180),
+          alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _settingRow({
+    required IconData icon,
+    required String title,
+    String? sub,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool danger = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: danger
+                    ? _RS.error.withValues(alpha: 0.12)
+                    : _RS.panel2,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon,
+                  size: 18, color: danger ? _RS.error : _RS.amber),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: danger ? _RS.error : _RS.ink,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (sub != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        sub,
+                        style: const TextStyle(fontSize: 12.5, color: _RS.mute),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _group(List<Widget> rows) {
+    final children = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      if (i > 0) {
+        children.add(const Padding(
+          padding: EdgeInsets.only(left: 68),
+          child: Divider(height: 1, thickness: 1, color: _RS.line),
+        ));
+      }
+      children.add(rows[i]);
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: _RS.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _RS.line),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _groupLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 18, 6, 8),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          color: _RS.mute,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+
+  static const _chevron =
+      Icon(Icons.chevron_right, size: 18, color: _RS.mute);
+
+  // ─────────────────────────────────────────────────────────────
+  // SETTINGS
+  // ─────────────────────────────────────────────────────────────
+  Widget _settingsView() {
+    final profile = ref.watch(currentProfileProvider);
+    final info = profile?.subscriptionInfo;
+    final locale = ref.watch(appSettingProvider).locale;
+    final pkg = globalState.packageInfo;
+
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _subHeader('Настройки', () => _go(_RSView.home)),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                children: [
+                  _accountCard(info),
+                  _groupLabel('Соединение'),
+                  _group([
+                    _settingRow(
+                      icon: Icons.public,
+                      title: 'Локация',
+                      sub: _currentServerLabel(),
+                      trailing: _chevron,
+                      onTap: () => _go(_RSView.location),
+                    ),
+                    _settingRow(
+                      icon: Icons.bolt,
+                      title: 'Автоподключение',
+                      sub: 'При запуске приложения',
+                      trailing: _rsToggle(
+                          _autoConnect, () => setState(() => _autoConnect = !_autoConnect)),
+                    ),
+                    _settingRow(
+                      icon: Icons.shield_outlined,
+                      title: 'Kill-switch',
+                      sub: 'Блокировать интернет, если VPN отключился',
+                      trailing: _rsToggle(
+                          _killSwitch, () => setState(() => _killSwitch = !_killSwitch)),
+                    ),
+                    _settingRow(
+                      icon: Icons.tune,
+                      title: 'Раздельный туннель',
+                      sub: 'Какие приложения идут мимо VPN',
+                      trailing: _chevron,
+                      onTap: () => ref
+                          .read(currentPageLabelProvider.notifier)
+                          .toPage(PageLabel.tools),
+                    ),
+                  ]),
+                  _groupLabel('Приложение'),
+                  _group([
+                    _settingRow(
+                      icon: Icons.notifications_none,
+                      title: 'Уведомление о статусе',
+                      sub: 'Постоянная нотификация VPN',
+                      trailing: _rsToggle(
+                          _statusNotif, () => setState(() => _statusNotif = !_statusNotif)),
+                    ),
+                    _settingRow(
+                      icon: Icons.language,
+                      title: 'Язык',
+                      sub: (locale == null || locale.isEmpty)
+                          ? 'Системный'
+                          : locale,
+                      trailing: _chevron,
+                      onTap: () => ref
+                          .read(currentPageLabelProvider.notifier)
+                          .toPage(PageLabel.tools),
+                    ),
+                    _settingRow(
+                      icon: Icons.troubleshoot,
+                      title: 'Диагностика',
+                      sub: 'Журнал и помощь поддержке',
+                      trailing: _chevron,
+                      onTap: () => _go(_RSView.diagnostics),
+                    ),
+                    _settingRow(
+                      icon: Icons.info_outline,
+                      title: 'О приложении',
+                      sub: 'Версия ${pkg.version} (${pkg.buildNumber})',
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  _group([
+                    _settingRow(
+                      icon: Icons.logout,
+                      title: 'Выйти из аккаунта',
+                      danger: true,
+                      onTap: _confirmLogout,
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _accountCard(SubscriptionInfo? info) {
+    final hasInfo = info != null && (info.total > 0 || info.expire > 0);
+    final used = info == null ? 0 : info.upload + info.download;
+    final sub = hasInfo
+        ? '${info.expire > 0 ? 'до ${_fmtDate(info.expire)} · ' : ''}'
+            '${used.traffic.show} из ${info.total > 0 ? info.total.traffic.show : '∞'}'
+        : 'Данные подписки подтянутся после обновления';
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _RS.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _RS.line),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _RS.amber.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person_outline, color: _RS.amber, size: 22),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasInfo ? 'Подписка активна' : 'Подписка',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: _RS.ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sub,
+                  style: const TextStyle(fontSize: 12.5, color: _RS.mute),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LOCATION (real proxy group)
+  // ─────────────────────────────────────────────────────────────
+  Widget _locationView() {
+    final group = _serverGroup();
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _subHeader(
+              'Локация',
+              () => _go(_RSView.home),
+              action: GestureDetector(
+                onTap: group == null
+                    ? null
+                    : () => delayTest(group.all, group.testUrl),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _RS.panel,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: _RS.line),
+                  ),
+                  child: const Icon(Icons.refresh, size: 18, color: _RS.dim),
+                ),
+              ),
+            ),
+            Expanded(
+              child: group == null || group.all.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Серверы появятся после загрузки подписки',
+                        style: TextStyle(color: _RS.mute, fontSize: 14),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      itemCount: group.all.length,
+                      itemBuilder: (_, i) => _serverRow(group, group.all[i]),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _serverRow(Group group, Proxy proxy) {
+    final selected = group.now == proxy.name;
+    final ping =
+        ref.watch(delayProvider(proxyName: proxy.name, testUrl: group.testUrl));
+    return GestureDetector(
+      onTap: () {
+        ref
+            .read(profilesActionProvider.notifier)
+            .updateCurrentSelectedMap(group.name, proxy.name);
+        ref
+            .read(proxiesActionProvider.notifier)
+            .changeProxyDebounce(group.name, proxy.name);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? _RS.connected.withValues(alpha: 0.08) : _RS.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? _RS.connected.withValues(alpha: 0.45) : _RS.line,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                proxy.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  color: _RS.ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              ping == null ? '—' : '$ping ms',
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: _pingColor(ping),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _radio(selected),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _radio(bool on) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: on ? _RS.connected : _RS.line2, width: 2),
+      ),
+      child: on
+          ? Center(
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: _RS.connected,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // DIAGNOSTICS
+  // ─────────────────────────────────────────────────────────────
+  Widget _diagnosticsView() {
+    final pkg = globalState.packageInfo;
+    final logs = ref.watch(logsProvider).list;
+    final recent = logs.reversed.take(14).toList();
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _subHeader('Диагностика', () => _go(_RSView.settings)),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _RS.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _RS.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Версия ${pkg.version} (build ${pkg.buildNumber})',
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            color: _RS.ink,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Журнал событий ядра — приложите к обращению в поддержку.',
+                          style: TextStyle(fontSize: 12.5, color: _RS.mute),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _groupLabel('Журнал событий'),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _RS.panel,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _RS.line),
+                    ),
+                    child: recent.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(18),
+                            child: Text(
+                              'Пока пусто',
+                              style: TextStyle(color: _RS.mute, fontSize: 13),
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              for (var i = 0; i < recent.length; i++) ...[
+                                if (i > 0)
+                                  const Divider(
+                                      height: 1, thickness: 1, color: _RS.line),
+                                _logRow(recent[i]),
+                              ],
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: GestureDetector(
+                onTap: () => _copyLogs(logs),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  decoration: BoxDecoration(
+                    color: _RS.amber,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.copy, size: 17, color: _RS.navy),
+                      SizedBox(width: 8),
+                      Text(
+                        'Скопировать для поддержки',
+                        style: TextStyle(
+                          color: _RS.navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _logRow(Log log) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: _logColor(log.logLevel),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              log.payload,
+              style: const TextStyle(fontSize: 12.5, color: _RS.dim),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // CONNECTION DETAILS (bottom sheet)
+  // ─────────────────────────────────────────────────────────────
+  void _showDetails() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Consumer(
+        builder: (_, ref, _) {
+          final traffic = ref.watch(totalTrafficProvider);
+          final runTime = ref.watch(runTimeProvider);
+          return Container(
+            decoration: const BoxDecoration(
+              color: _RS.navy2,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              border: Border(top: BorderSide(color: _RS.line2)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: const BoxDecoration(
+                        color: _RS.connected,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    const Text(
+                      'Соединение защищено',
+                      style: TextStyle(
+                        color: _RS.ink,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _detailRow(Icons.public, 'Сервер', _currentServerLabel()),
+                _detailRow(Icons.schedule, 'Время сессии',
+                    utils.getTimeText(runTime)),
+                _detailRow(Icons.download, 'Загружено',
+                    traffic.down.traffic.show),
+                _detailRow(
+                    Icons.upload, 'Отправлено', traffic.up.traffic.show),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _go(_RSView.location);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    decoration: BoxDecoration(
+                      color: _RS.panel,
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(color: _RS.line2),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.swap_horiz, size: 18, color: _RS.amber),
+                        SizedBox(width: 8),
+                        Text(
+                          'Сменить сервер',
+                          style: TextStyle(
+                            color: _RS.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _RS.panel2,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: _RS.amber),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13.5, color: _RS.dim),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: _RS.ink,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // helpers
+  // ─────────────────────────────────────────────────────────────
+  Group? _serverGroup() {
+    final groups = ref.watch(groupsProvider);
+    Group? selector;
+    Group? any;
+    for (final g in groups) {
+      if (g.hidden == true) continue;
+      any ??= g;
+      if (g.type == GroupType.Selector && selector == null) selector = g;
+    }
+    return selector ?? any;
+  }
+
+  String _currentServerLabel() {
+    final group = _serverGroup();
+    final now = group?.now;
+    if (now == null || now.isEmpty) return 'Россия · авто';
+    return now;
+  }
+
+  void _confirmLogout() async {
+    final ok = await globalState.showMessage(
+      title: 'Выйти из аккаунта',
+      message: const TextSpan(
+        text: 'Подписка будет удалена из приложения. Продолжить?',
+      ),
+    );
+    if (ok != true) return;
+    final profile = ref.read(currentProfileProvider);
+    if (profile != null) {
+      await ref.read(profilesActionProvider.notifier).deleteProfile(profile.id);
+    }
+    _go(_RSView.home);
+  }
+
+  Future<void> _copyLogs(List<Log> logs) async {
+    final text = logs.map((l) => '[${l.logLevel.name}] ${l.payload}').join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    globalState.showMessage(
+      message: const TextSpan(text: 'Журнал скопирован'),
+    );
+  }
+
+  Color _pingColor(int? ms) {
+    if (ms == null) return _RS.mute;
+    if (ms < 40) return _RS.connected;
+    if (ms < 90) return _RS.amber;
+    return const Color(0xFFE8915B);
+  }
+
+  Color _logColor(LogLevel level) {
+    switch (level) {
+      case LogLevel.error:
+        return _RS.error;
+      case LogLevel.warning:
+        return _RS.amber;
+      case LogLevel.info:
+        return _RS.connected;
+      default:
+        return _RS.mute;
+    }
+  }
+
+  String _fmtDate(int epochSeconds) {
+    final d = DateTime.fromMillisecondsSinceEpoch(epochSeconds * 1000);
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    return '$dd.$mm.${d.year}';
   }
 }
 
