@@ -117,22 +117,10 @@ class AppEnvManager extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kDebugMode) {
-      if (globalState.isPre) {
-        return Banner(
-          message: 'DEBUG',
-          location: BannerLocation.topEnd,
-          child: child,
-        );
-      }
-    }
-    if (globalState.isPre) {
-      return Banner(
-        message: 'PRE',
-        location: BannerLocation.topEnd,
-        child: child,
-      );
-    }
+    // RadarShield: no FlClash dev/pre corner banner (DEBUG/PRE). It is an
+    // upstream build marker irrelevant to our product and was the red ribbon
+    // users saw in the top-right corner. The framework checked-mode banner is
+    // separately disabled via debugShowCheckedModeBanner in application.dart.
     return child;
   }
 }

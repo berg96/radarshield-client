@@ -36,6 +36,13 @@ class HomePage extends StatelessWidget {
               final isMobile = state.viewMode == ViewMode.mobile;
               final navigationItems = state.navigationItems;
               final currentIndex = state.currentIndex;
+              // RadarShield: the dashboard is our full-screen "simple" shell —
+              // hide the FlClash bottom navbar there. Advanced pages keep the
+              // navbar (interim) so the user can navigate back to the dashboard.
+              final onDashboard =
+                  currentIndex >= 0 &&
+                  currentIndex < navigationItems.length &&
+                  navigationItems[currentIndex].label == PageLabel.dashboard;
               final bottomNavigationBar = NavigationBarTheme(
                 data: _NavigationBarDefaultsM3(context),
                 child: NavigationBar(
@@ -72,14 +79,15 @@ class HomePage extends StatelessWidget {
                           child: child!,
                         ),
                       ),
-                      MediaQuery.removePadding(
-                        removeTop: true,
-                        removeBottom: false,
-                        removeLeft: true,
-                        removeRight: true,
-                        context: context,
-                        child: bottomNavigationBar,
-                      ),
+                      if (!onDashboard)
+                        MediaQuery.removePadding(
+                          removeTop: true,
+                          removeBottom: false,
+                          removeLeft: true,
+                          removeRight: true,
+                          context: context,
+                          child: bottomNavigationBar,
+                        ),
                     ],
                   ),
                 );

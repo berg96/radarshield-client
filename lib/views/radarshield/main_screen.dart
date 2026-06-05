@@ -8,6 +8,7 @@ import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ── brand tokens (design/SPEC.md) ────────────────────────────────
@@ -72,9 +73,10 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
 
   void _toggle(bool hasProfile) {
     if (!hasProfile) {
-      globalState.showMessage(
-        message: const TextSpan(text: 'Сначала добавьте подписку'),
-      );
+      // No subscription yet → route to the Profiles page so the user can paste
+      // their sub-link. This is the interim onboarding path until a dedicated
+      // onboarding / zero-config flow lands.
+      ref.read(currentPageLabelProvider.notifier).toPage(PageLabel.profiles);
       return;
     }
     final next = !ref.read(isStartProvider);
@@ -85,12 +87,32 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     }, duration: commonDuration);
   }
 
+  // First-run onboarding: read the sub-link from the clipboard and hand it to
+  // the canonical add flow (shows progress, lands on Profiles with the new sub).
+  Future<void> _pasteSub() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      globalState.showMessage(
+        message: const TextSpan(
+          text: 'Буфер пуст — скопируйте ссылку подписки из Telegram-бота',
+        ),
+      );
+      return;
+    }
+    ref.read(profilesActionProvider.notifier).addProfileFormURL(text);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isStart = ref.watch(isStartProvider);
     final status = ref.watch(coreStatusProvider);
     final hasProfile =
         ref.watch(profilesProvider.select((state) => state.isNotEmpty));
+
+    // No subscription yet → show our own onboarding instead of the power UI.
+    if (!hasProfile) return _onboardingView();
+
     final state = _resolveState(isStart, status);
     final color = _color(state);
 
@@ -349,7 +371,125 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
               fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right, size: 16, color: _RS.mute),
         ],
+      ),
+    );
+  }
+
+  // ── first-run onboarding (paste subscription link) ─────────────
+  Widget _onboardingView() {
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const _Logo(size: 24),
+                  const SizedBox(width: 9),
+                  const Text(
+                    'RadarShield',
+                    style: TextStyle(
+                      color: _RS.ink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: _RS.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _RS.amber.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: const Icon(Icons.link, color: _RS.amber, size: 26),
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Вставьте ссылку\nподписки',
+                      style: TextStyle(
+                        color: _RS.ink,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Откройте нашего бота в Telegram и скопируйте ссылку. '
+                      'Вставьте её сюда — остальное сделаем сами.',
+                      style: TextStyle(
+                        color: _RS.dim,
+                        fontSize: 14.5,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: _pasteSub,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _RS.amber,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.content_paste, color: _RS.navy, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Вставить ссылку из буфера',
+                        style: TextStyle(
+                          color: _RS.navy,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () => ref
+                    .read(currentPageLabelProvider.notifier)
+                    .toPage(PageLabel.profiles),
+                behavior: HitTestBehavior.opaque,
+                child: const Center(
+                  child: Text(
+                    'Ввести вручную или по QR →',
+                    style: TextStyle(
+                      color: _RS.mute,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
