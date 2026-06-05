@@ -15,8 +15,9 @@ class Navigation {
         keep: false,
         icon: const Icon(Icons.space_dashboard),
         label: PageLabel.dashboard,
-        builder: (_) =>
-            const DashboardView(key: GlobalObjectKey(PageLabel.dashboard)),
+        builder: (_) => const RadarShieldMainScreen(
+          key: GlobalObjectKey(PageLabel.dashboard),
+        ),
       ),
       NavigationItem(
         icon: const Icon(Icons.article),

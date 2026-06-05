@@ -10,5 +10,6 @@ export 'developer.dart';
 export 'logs.dart';
 export 'profiles/profiles.dart';
 export 'proxies/proxies.dart';
+export 'radarshield/main_screen.dart';
 export 'resources.dart';
 export 'tools.dart';
