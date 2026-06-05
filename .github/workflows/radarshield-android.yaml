@@ -1,0 +1,67 @@
+name: RadarShield Android (test)
+
+# Lightweight test-build pipeline for the RadarShield fork.
+# Builds an Android APK in the cloud (GitHub-hosted runner) — no local toolchain
+# needed. Unsigned/debug-signed: with no keystore in local.properties the gradle
+# `isRelease` flag is false, so the release build falls back to the debug signing
+# key and a `.dev` applicationId suffix. The resulting APK is sideloadable for
+# testing (NOT a Play-store release build).
+#
+# Trigger: push to the `radarshield` branch, or manually via the Actions tab
+# ("Run workflow"). Download the APK from the run's Artifacts section.
+#
+# This is intentionally separate from upstream build.yaml (which only fires on
+# v* tags and pushes to chen08209's Telegram/F-Droid/release infra) so the fork
+# stays thin and easy to rebase on upstream.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - radarshield
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          cache-dependency-path: |
+            core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.9
+          cache: true
+
+      - name: Setup NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
+          add-to-path: true
+          link-to-sdk: true
+
+      - name: Get Flutter dependencies
+        run: |
+          flutter --version
+          flutter pub get
+
+      - name: Build
+        run: dart setup.dart android -v
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: radarshield-android-apk
+          path: ./dist
+          overwrite: true
