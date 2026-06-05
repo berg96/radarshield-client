@@ -43,6 +43,20 @@ android {
     }
 
     signingConfigs {
+        // RadarShield: pin the debug/sideload key to a stable keystore committed
+        // to the repo, so EVERY CI build is signed with the same certificate.
+        // Without this, GitHub's clean runners generate a fresh debug keystore
+        // per run → the signing cert changes every build → Android refuses an
+        // in-place update ("conflicts with existing package", must uninstall).
+        // This is a throwaway DEBUG key (storepass 'android'), NOT a Play release
+        // key — safe to keep in the public test-channel repo. Release builds fall
+        // back to this signingConfig when no real keystore.jks is provided.
+        getByName("debug") {
+            storeFile = file("radarshield-debug.keystore")
+            storePassword = "android"
+            keyAlias = "radarshield"
+            keyPassword = "android"
+        }
         if (isRelease) {
             create("release") {
                 storeFile = mStoreFile

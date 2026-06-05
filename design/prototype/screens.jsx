@@ -177,6 +177,7 @@ function LocationChip({ text = 'Россия · авто' }) {
       borderRadius: 999, background: RS.panel, border: `1px solid ${RS.line}`, color: RS.dim, fontSize: 13.5, fontWeight: 500,
     }}>
       <Icon name="globe" size={15} stroke={2} color={RS.amber} /> {text}
+      <Icon name="chevron" size={14} stroke={2} color={RS.mute} />
     </div>
   );
 }
@@ -184,7 +185,7 @@ function LocationChip({ text = 'Россия · авто' }) {
 // ─────────────────────────────────────────────────────────────
 // MAIN screen
 // ─────────────────────────────────────────────────────────────
-function MainScreen({ state = 'off', styleVariant = 'radar', connectedColor = RS.connected, connectingColor = RS.connecting, extras = {}, onTap, onSettings, onLogout, btnSize = 200, sessionTime = '00:14:32' }) {
+function MainScreen({ state = 'off', styleVariant = 'radar', connectedColor = RS.connected, connectingColor = RS.connecting, extras = {}, onTap, onSettings, onLogout, onLocationTap, onDetails, btnSize = 200, sessionTime = '00:14:32' }) {
   const showTimer = extras.showTimer && state === 'connected';
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 18px 22px', position: 'relative' }}>
@@ -216,6 +217,11 @@ function MainScreen({ state = 'off', styleVariant = 'radar', connectedColor = RS
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
         <PowerButton state={state} styleVariant={styleVariant} connectedColor={connectedColor} connectingColor={connectingColor} size={btnSize} onTap={onTap} />
         <StatusText state={state} connectedColor={connectedColor} connectingColor={connectingColor} />
+        {state === 'connected' && onDetails && (
+          <div onClick={onDetails} className="rs-tap" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '6px 12px', borderRadius: 999, background: RS.panel, border: `1px solid ${RS.line}`, color: RS.dim, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+            <Icon name="info" size={14} stroke={2} color={RS.amber} /> Детали соединения
+          </div>
+        )}
         {showTimer && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, color: RS.dim, fontSize: 14, fontFamily: RS.display, fontWeight: 600 }}>
             <Icon name="clock" size={15} stroke={2} color={RS.mute} /> {sessionTime}
@@ -225,7 +231,11 @@ function MainScreen({ state = 'off', styleVariant = 'radar', connectedColor = RS
 
       {/* bottom: location */}
       <div style={{ display: 'flex', justifyContent: 'center', minHeight: 38 }}>
-        {extras.showLocation && <LocationChip />}
+        {extras.showLocation && (
+          <div onClick={onLocationTap} className={onLocationTap ? 'rs-tap' : ''} style={{ cursor: onLocationTap ? 'pointer' : 'default' }}>
+            <LocationChip />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -312,9 +322,9 @@ function OnboardingScreen({ filled = false, onContinue, onPaste }) {
 // ─────────────────────────────────────────────────────────────
 // SETTINGS — hidden zone, simple list
 // ─────────────────────────────────────────────────────────────
-function SettingRow({ icon, title, sub, right, danger }) {
+function SettingRow({ icon, title, sub, right, danger, onClick }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '15px 16px' }}>
+    <div onClick={onClick} className={onClick ? 'rs-tap' : ''} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '15px 16px' }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: danger ? withA(RS.error, 0.12) : RS.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: danger ? RS.error : RS.amber, flexShrink: 0 }}>
         <Icon name={icon} size={18} stroke={2} />
       </div>
@@ -335,11 +345,13 @@ function Toggle({ on }) {
   );
 }
 
-function SettingsScreen({ onBack }) {
+function SettingsScreen({ onBack, onSplitTunnel, onDiagnostics, onLocation }) {
+  const [killSwitch, setKill] = React.useState(false);
+  const [statusNotif, setNotif] = React.useState(true);
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px' }}>
-        <div onClick={onBack} style={{ width: 38, height: 38, borderRadius: 11, background: RS.panel, border: `1px solid ${RS.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: RS.dim, cursor: 'pointer', transform: 'scaleX(-1)' }}>
+        <div onClick={onBack} className="rs-tap" style={{ width: 38, height: 38, borderRadius: 11, background: RS.panel, border: `1px solid ${RS.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: RS.dim, cursor: 'pointer', transform: 'scaleX(-1)' }}>
           <Icon name="chevron" size={18} stroke={2.2} />
         </div>
         <span style={{ fontFamily: RS.display, fontWeight: 800, fontSize: 21, color: RS.ink }}>Настройки</span>
@@ -357,19 +369,31 @@ function SettingsScreen({ onBack }) {
         <div style={{ fontSize: 12.5, fontWeight: 700, color: RS.amber }}>Продлить</div>
       </div>
 
+      {/* connection group */}
+      <div style={{ fontSize: 12, color: RS.mute, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', margin: '4px 22px 8px' }}>Соединение</div>
       <div style={{ background: RS.panel, margin: '0 16px', borderRadius: 16, border: `1px solid ${RS.line}`, overflow: 'hidden' }}>
-        <SettingRow icon="sliders" title="Продвинутый режим" sub="Ноды, профили, маршруты" right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
-        <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
-        <SettingRow icon="globe" title="Локация" sub="Россия · авто" right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
+        <SettingRow icon="globe" title="Локация" sub="Россия · авто" onClick={onLocation} right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
         <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
         <SettingRow icon="bolt" title="Автоподключение" sub="При запуске системы" right={<Toggle on={true} />} />
         <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
+        <SettingRow icon="shield" title="Kill-switch" sub="Блокировать интернет, если VPN отключился" right={<div onClick={() => setKill(v => !v)} className="rs-tap"><Toggle on={killSwitch} /></div>} />
+        <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
+        <SettingRow icon="sliders" title="Раздельный туннель" sub="Какие приложения идут мимо VPN" onClick={onSplitTunnel} right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
+      </div>
+
+      {/* app group */}
+      <div style={{ fontSize: 12, color: RS.mute, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', margin: '18px 22px 8px' }}>Приложение</div>
+      <div style={{ background: RS.panel, margin: '0 16px', borderRadius: 16, border: `1px solid ${RS.line}`, overflow: 'hidden' }}>
+        <SettingRow icon="info" title="Уведомление о статусе" sub="Постоянная нотификация VPN" right={<div onClick={() => setNotif(v => !v)} className="rs-tap"><Toggle on={statusNotif} /></div>} />
+        <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
         <SettingRow icon="language" title="Язык" sub="Русский" right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
+        <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
+        <SettingRow icon="refresh" title="Диагностика" sub="Журнал и помощь поддержке" onClick={onDiagnostics} right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
         <div style={{ height: 1, background: RS.line, marginLeft: 68 }} />
         <SettingRow icon="info" title="О приложении" sub="Версия 1.0.0" right={<Icon name="chevron" size={18} color={RS.mute} stroke={2} />} />
       </div>
 
-      <div style={{ background: RS.panel, margin: '14px 16px', borderRadius: 16, border: `1px solid ${RS.line}`, overflow: 'hidden' }}>
+      <div style={{ background: RS.panel, margin: '14px 16px 18px', borderRadius: 16, border: `1px solid ${RS.line}`, overflow: 'hidden' }}>
         <SettingRow icon="logout" title="Выйти из аккаунта" danger />
       </div>
     </div>
@@ -443,4 +467,5 @@ function AdvancedStub() {
 
 Object.assign(window, {
   PowerButton, MainScreen, SplashScreen, OnboardingScreen, SettingsScreen, ExpiredScreen, AdvancedStub, STATE_INFO, withA,
+  SettingRow, Toggle, LocationChip, stateColor,
 });

@@ -11,3 +11,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Exception: the stable DEBUG/sideload key is intentionally committed so every CI
+# build is signed with the same cert (in-place updates). It is a throwaway debug
+# key (pass 'android'), NOT a Play release key. A real release keystore must NOT
+# be committed — it goes through local.properties / CI secrets instead.
+!app/radarshield-debug.keystore

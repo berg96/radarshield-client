@@ -31,9 +31,11 @@ function Row({ children, gap = 36 }) {
 
 // ── LIVE interactive prototype ────────────────────────────────
 function LiveApp({ t }) {
-  const [screen, setScreen] = useState('main'); // splash|onboarding|main|settings|expired|advanced
+  const [screen, setScreen] = useState('main'); // main|onboarding|settings|expired|splash|location|diagnostics|split
   const [conn, setConn] = useState('off');
   const [filled, setFilled] = useState(false);
+  const [details, setDetails] = useState(false);
+  const [loc, setLoc] = useState('auto');
   const timer = useRef(null);
 
   const connectingColor = t.connectingColor || RS.connecting;
@@ -58,26 +60,36 @@ function LiveApp({ t }) {
   let body;
   if (screen === 'splash') body = <SplashScreen />;
   else if (screen === 'onboarding') body = <OnboardingScreen filled={filled} onPaste={() => setFilled(true)} onContinue={() => filled && setScreen('main')} />;
-  else if (screen === 'settings') body = <SettingsScreen onBack={() => setScreen('main')} />;
+  else if (screen === 'settings') body = <SettingsScreen onBack={() => setScreen('main')} onLocation={() => setScreen('location')} onSplitTunnel={() => setScreen('split')} onDiagnostics={() => setScreen('diagnostics')} />;
   else if (screen === 'expired') body = <ExpiredScreen onRenew={() => {}} />;
-  else if (screen === 'advanced') body = <AdvancedStub />;
+  else if (screen === 'location') body = <LocationScreen onBack={() => setScreen('main')} selected={loc} onSelect={setLoc} />;
+  else if (screen === 'diagnostics') body = <DiagnosticsScreen onBack={() => setScreen('settings')} />;
+  else if (screen === 'split') body = <SplitTunnelScreen onBack={() => setScreen('settings')} />;
   else body = (
     <MainScreen state={conn} styleVariant={t.buttonStyle} connectedColor={connectedColor} connectingColor={connectingColor}
-                extras={extras} onTap={tapButton} onSettings={() => setScreen('settings')} onLogout={() => { setFilled(false); setScreen('onboarding'); }} btnSize={186} />
+                extras={extras} onTap={tapButton} onSettings={() => setScreen('settings')}
+                onLocationTap={() => setScreen('location')} onDetails={() => setDetails(true)}
+                onLogout={() => { setFilled(false); setScreen('onboarding'); }} btnSize={186} />
   );
 
   const chips = [
-    ['main', 'Главный'], ['onboarding', 'Онбординг'], ['settings', 'Настройки'],
-    ['expired', 'Истекло'], ['advanced', 'Продвинутый'], ['splash', 'Сплеш'],
+    ['main', 'Главный'], ['location', 'Локация'], ['settings', 'Настройки'],
+    ['split', 'Разд. туннель'], ['diagnostics', 'Диагностика'],
+    ['onboarding', 'Онбординг'], ['expired', 'Истекло'], ['splash', 'Сплеш'],
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-      <Phone width={300}>{body}</Phone>
+      <Phone width={300}>
+        {body}
+        {details && screen === 'main' && (
+          <ConnectionDetails onClose={() => setDetails(false)} onChangeServer={() => { setDetails(false); setScreen('location'); }} />
+        )}
+      </Phone>
       {/* nav chips */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 330 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 340 }}>
         {chips.map(([k, lbl]) => (
-          <div key={k} onClick={() => setScreen(k)} style={{
+          <div key={k} onClick={() => { setDetails(false); setScreen(k); }} style={{
             fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 9, cursor: 'pointer',
             background: screen === k ? '#0f1d2e' : '#fff', color: screen === k ? '#fff' : '#5a6b7d',
             border: `1px solid ${screen === k ? '#0f1d2e' : '#d8dee6'}`, fontFamily: RS.font,
@@ -85,7 +97,7 @@ function LiveApp({ t }) {
         ))}
       </div>
       {screen === 'main' && (
-        <div style={{ fontSize: 13, color: '#5a6b7d', textAlign: 'center', maxWidth: 300 }}>
+        <div style={{ fontSize: 13, color: '#5a6b7d', textAlign: 'center', maxWidth: 320 }}>
           Нажмите кнопку: <b style={{ color: RS.off }}>серый</b> → <b style={{ color: connectingColor }}>жёлтый</b> → <b style={{ color: connectedColor }}>зелёный</b>.
           {' '}<span onClick={() => { clearT(); setConn('error'); }} style={{ color: RS.error, cursor: 'pointer', borderBottom: `1px dashed ${RS.error}` }}>Показать ошибку</span>
         </div>
@@ -148,13 +160,28 @@ function App() {
 
         {/* SCREENS */}
         <Section title="Онбординг и сервисные экраны"
-                 desc="Первый запуск — вставка ссылки подписки из Telegram-бота (этап 2: вход по email/Telegram). Настройки и «истекло» — мягкие, без жаргона.">
+                 desc="Первый запуск — вставка ссылки подписки из Telegram-бота. Настройки расширены: kill-switch, уведомление о статусе, точки входа в раздельный туннель и диагностику.">
           <Row gap={28}>
             <Phone width={248} label="Сплеш"><SplashScreen /></Phone>
             <Phone width={248} label="Онбординг"><OnboardingScreen filled={false} onPaste={() => {}} onContinue={() => {}} /></Phone>
-            <Phone width={248} label="Настройки"><SettingsScreen onBack={() => {}} /></Phone>
+            <Phone width={248} label="Настройки"><SettingsScreen onBack={() => {}} onLocation={() => {}} onSplitTunnel={() => {}} onDiagnostics={() => {}} /></Phone>
             <Phone width={248} label="Подписка истекла"><ExpiredScreen onRenew={() => {}} /></Phone>
-            <Phone width={248} label="Продвинутый режим"><AdvancedStub /></Phone>
+          </Row>
+        </Section>
+
+        {/* ADVANCED-IN-OUR-STYLE */}
+        <Section title="Продвинутые экраны — в нашем стиле"
+                 desc="Чужой интерфейс FLClash убран полностью. Всё нужное перерисовано: выбор сервера с живым пингом, детали соединения (шторка), диагностика для поддержки и раздельный туннель.">
+          <Row gap={28}>
+            <Phone width={300} label="Выбор локации"><LocationScreen onBack={() => {}} selected="auto" onSelect={() => {}} /></Phone>
+            <Phone width={300} label="Детали соединения">
+              <MainScreen state="connected" styleVariant={t.buttonStyle} connectedColor={t.connectedColor} connectingColor={t.connectingColor}
+                          extras={{ showLocation: t.showLocation, showShield: t.showShield, showTimer: t.showTimer }}
+                          onTap={() => {}} onSettings={() => {}} onLogout={() => {}} btnSize={168} />
+              <ConnectionDetails onClose={() => {}} onChangeServer={() => {}} />
+            </Phone>
+            <Phone width={300} label="Диагностика"><DiagnosticsScreen onBack={() => {}} /></Phone>
+            <Phone width={300} label="Раздельный туннель"><SplitTunnelScreen onBack={() => {}} /></Phone>
           </Row>
         </Section>
 

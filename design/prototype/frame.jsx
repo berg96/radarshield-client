@@ -46,6 +46,12 @@ const RS_PATHS = {
   sliders: 'M4 21v-7|M4 10V3|M12 21v-9|M12 8V3|M20 21v-5|M20 12V3|M1 14h6|M9 8h6|M17 16h6',
   bolt:    'M13 2L3 14h7l-1 8 10-12h-7l1-8z',
   clock:   'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z|M12 6v6l4 2',
+  search:  'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z|M21 21l-4.3-4.3',
+  send:    'M22 2L11 13|M22 2l-7 20-4-9-9-4 20-7z',
+  copy:    'M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z|M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1',
+  upload:  'M12 19V5|M5 12l7-7 7 7',
+  download:'M12 5v14|M5 12l7 7 7-7',
+  swap:    'M7 10l-4 4 4 4|M3 14h12|M17 14l4-4-4-4|M21 10H9',
 };
 
 function Icon({ name, size = 24, color = 'currentColor', stroke = 2, fill = 'none', style }) {
@@ -163,4 +169,26 @@ function WinWindow({ children, width = 460, height = 520, label }) {
   );
 }
 
-Object.assign(window, { RS, Icon, RSLogo, Phone, WinWindow });
+Object.assign(window, { RS, Icon, RSLogo, Phone, WinWindow, Flag });
+
+// ─────────────────────────────────────────────────────────────
+// Flag — simple rounded-rect flags by country code
+// ─────────────────────────────────────────────────────────────
+function Flag({ code, size = 22 }) {
+  const r = size * 0.22;
+  const wrap = (children) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block' }}>
+      <defs><clipPath id={`fc-${code}`}><rect x="2" y="4" width="20" height="16" rx={r} /></clipPath></defs>
+      <g clipPath={`url(#fc-${code})`}>{children}</g>
+      <rect x="2" y="4" width="20" height="16" rx={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+    </svg>
+  );
+  switch (code) {
+    case 'DE': return wrap(<><rect x="2" y="4" width="20" height="5.33" fill="#1a1a1a"/><rect x="2" y="9.33" width="20" height="5.33" fill="#dd0000"/><rect x="2" y="14.66" width="20" height="5.34" fill="#ffce00"/></>);
+    case 'NL': return wrap(<><rect x="2" y="4" width="20" height="5.33" fill="#ae1c28"/><rect x="2" y="9.33" width="20" height="5.33" fill="#fff"/><rect x="2" y="14.66" width="20" height="5.34" fill="#21468b"/></>);
+    case 'FI': return wrap(<><rect x="2" y="4" width="20" height="16" fill="#fff"/><rect x="2" y="10" width="20" height="4" fill="#003580"/><rect x="8" y="4" width="4" height="16" fill="#003580"/></>);
+    case 'US': return wrap(<><rect x="2" y="4" width="20" height="16" fill="#fff"/>{[0,2,4,6].map(i=><rect key={i} x="2" y={4+i*2.28+0} width="20" height="1.14" fill="#b22234"/>)}{[0,1,2,3].map(i=><rect key={i} x="2" y={4+i*2.28+1.14} width="20" height="1.14" fill="#b22234"/>)}<rect x="2" y="4" width="9" height="8.5" fill="#3c3b6e"/></>);
+    case 'RU': return wrap(<><rect x="2" y="4" width="20" height="5.33" fill="#fff"/><rect x="2" y="9.33" width="20" height="5.33" fill="#0039a6"/><rect x="2" y="14.66" width="20" height="5.34" fill="#d52b1e"/></>);
+    default:   return wrap(<rect x="2" y="4" width="20" height="16" fill={RS.panel2}/>);
+  }
+}
