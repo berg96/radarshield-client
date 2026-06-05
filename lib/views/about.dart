@@ -50,7 +50,7 @@ class AboutView extends StatelessWidget {
         ListItem(
           title: const Text('Telegram'),
           onTap: () {
-            globalState.openUrl('https://t.me/FlClash');
+            globalState.openUrl('https://t.me/radarshield_bot');
           },
           trailing: const Icon(Icons.launch),
         ),

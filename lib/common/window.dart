@@ -25,6 +25,7 @@ class Window {
       protocol.register('clash');
       protocol.register('clashmeta');
       protocol.register('flclash');
+      protocol.register('radarshield');
     }
     await windowManager.ensureInitialized();
     // kDebugMode ? Size(680, 580) :
