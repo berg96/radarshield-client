@@ -1354,18 +1354,24 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     });
   }
 
-  // Build the payment page URL from the user's own bound subscription link, so
-  // the site already knows who they are. .../sub/<token> -> .../pay/<token>.
+  // Build the payment page URL from the user's own bound subscription link.
+  // The sub token already encodes the (HMAC-signed) tg_id, so the landing's
+  // /pay resolves the user from ?sub=<token> and redirects to the signed
+  // uid+sig page — no @username search needed.
   String _payUrl() {
     final url = ref.read(currentProfileProvider)?.url ?? '';
-    if (url.contains('/sub/')) {
-      return url.replaceFirst('/sub/', '/pay/');
-    }
     final uri = Uri.tryParse(url);
-    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
-      return '${uri.scheme}://${uri.host}/pay';
+    final origin = (uri != null && uri.hasScheme && uri.host.isNotEmpty)
+        ? '${uri.scheme}://${uri.host}'
+        : 'https://radarshield.mooo.com';
+    final i = url.indexOf('/sub/');
+    if (i != -1) {
+      final token = url.substring(i + 5).split('/').first.split('?').first;
+      if (token.isNotEmpty) {
+        return '$origin/pay?sub=${Uri.encodeComponent(token)}';
+      }
     }
-    return 'https://radarshield.mooo.com/pay';
+    return '$origin/pay';
   }
 
   Future<void> _refreshSubscription() async {
