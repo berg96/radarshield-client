@@ -205,7 +205,9 @@ class VpnService : SystemVpnService(), IBaseService,
                 }
             }
             setSession("FlClash")
-            setBlocking(false)
+            // RadarShield kill-switch: when on, block leaks while the tunnel is
+            // (re)establishing instead of letting traffic escape unprotected.
+            setBlocking(options.blockConnections)
             if (Build.VERSION.SDK_INT >= 29) {
                 setMetered(false)
             }

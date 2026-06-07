@@ -51,8 +51,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   final TextEditingController _subCtrl = TextEditingController();
 
   _RSView _view = _RSView.home;
-  // local-only UI toggles (visual; wiring to core behaviour comes later)
-  bool _killSwitch = false;
+  // status-notification toggle is still visual (Android requires the VPN
+  // notification; there is no core setting to suppress it)
   bool _statusNotif = true;
   // lazily-loaded installed-app list for the split-tunnel screen
   Future<List<Package>>? _packagesFuture;
@@ -892,6 +892,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     final info = profile?.subscriptionInfo;
     final locale = ref.watch(appSettingProvider).locale;
     final autoRun = ref.watch(appSettingProvider.select((s) => s.autoRun));
+    final killSwitch = ref.watch(vpnSettingProvider.select((s) => s.killSwitch));
     final pkg = globalState.packageInfo;
 
     return Material(
@@ -927,9 +928,13 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     _settingRow(
                       icon: Icons.shield_outlined,
                       title: 'Kill-switch',
-                      sub: 'Блокировать интернет, если VPN отключился',
+                      sub: 'Не выпускать трафик мимо VPN при разрыве',
                       trailing: _rsToggle(
-                          _killSwitch, () => setState(() => _killSwitch = !_killSwitch)),
+                          killSwitch,
+                          () => ref
+                              .read(vpnSettingProvider.notifier)
+                              .update((s) =>
+                                  s.copyWith(killSwitch: !killSwitch))),
                     ),
                     _settingRow(
                       icon: Icons.tune,

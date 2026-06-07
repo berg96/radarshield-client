@@ -634,6 +634,7 @@ SharedState sharedState(Ref ref) {
       dnsHijacking: vpnSetting.dnsHijacking,
       accessControlProps: vpnSetting.accessControlProps,
       allowBypass: vpnSetting.allowBypass,
+      blockConnections: vpnSetting.killSwitch,
       bypassDomain: bypassDomain,
     ),
   );
