@@ -33,7 +33,47 @@ const defaultVpnProps = VpnProps();
 const defaultNetworkProps = NetworkProps();
 const defaultProxiesStyleProps = ProxiesStyleProps();
 const defaultWindowProps = WindowProps();
-const defaultAccessControlProps = AccessControlProps();
+// RadarShield: РФ-приложения, которые из коробки идут МИМО VPN (split-tunnel).
+// Дублирует логику доменных rules подписки на уровне приложений — многие
+// банк/гос-приложения активно режут VPN-IP, и доменных правил им мало.
+// Отсутствующий на телефоне пакет = no-op (безвреден). Список стартовый —
+// расширять/сверять по реальным дампам пакетов на устройстве.
+const defaultBypassPackages = <String>[
+  // банки
+  'ru.sberbankmobile', // Сбербанк Онлайн
+  'com.idamob.tinkoff.android', // Т-Банк (Тинькофф)
+  'ru.vtb24.mobilebanking.android', // ВТБ Онлайн
+  'ru.alfabank.mobile.android', // Альфа-Банк
+  'ru.gazprombank.android.mobilebank.app', // Газпромбанк
+  'ru.raiffeisennews', // Райффайзен
+  // платежи / госуслуги (пакеты сверить на устройстве)
+  'ru.nspk.mirpay', // Mir Pay
+  'ru.gosuslugi.app', // Госуслуги
+  'ru.fns.billingnalog', // Налоги ФЛ (ФНС)
+  // соцсети / почта
+  'com.vkontakte.android', // VK
+  'com.vk.im', // VK Мессенджер
+  'ru.ok.android', // Одноклассники
+  'ru.mail.mailapp', // Почта Mail.ru
+  // маркетплейсы
+  'ru.ozon.app.android', // Ozon
+  'com.wildberries.ru', // Wildberries
+  'com.avito.android', // Avito
+  // Яндекс
+  'ru.yandex.searchplugin', // Яндекс (с Алисой)
+  'ru.yandex.taxi', // Яндекс Go
+  'ru.yandex.yandexmaps', // Яндекс Карты
+  'ru.yandex.music', // Яндекс Музыка
+  'ru.kinopoisk', // Кинопоиск
+];
+
+// Преднастроенный split-tunnel: включён, режим «выбранные мимо VPN»,
+// со стартовым РФ-списком. Юзер может донастроить на экране.
+const defaultAccessControlProps = AccessControlProps(
+  enable: true,
+  mode: AccessControlMode.rejectSelected,
+  rejectList: defaultBypassPackages,
+);
 const defaultThemeProps = ThemeProps(primaryColor: defaultPrimaryColor);
 
 const List<DashboardWidget> defaultDashboardWidgets = [
