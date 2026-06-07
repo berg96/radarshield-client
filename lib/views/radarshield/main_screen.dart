@@ -1354,18 +1354,18 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     });
   }
 
-  // Build the renewal page URL from the user's own bound subscription link, so
-  // the site already knows who they are. .../sub/<token> -> .../renew/<token>.
-  String _renewUrl() {
+  // Build the payment page URL from the user's own bound subscription link, so
+  // the site already knows who they are. .../sub/<token> -> .../pay/<token>.
+  String _payUrl() {
     final url = ref.read(currentProfileProvider)?.url ?? '';
     if (url.contains('/sub/')) {
-      return url.replaceFirst('/sub/', '/renew/');
+      return url.replaceFirst('/sub/', '/pay/');
     }
     final uri = Uri.tryParse(url);
     if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
-      return '${uri.scheme}://${uri.host}/renew';
+      return '${uri.scheme}://${uri.host}/pay';
     }
-    return 'https://radarshield.mooo.com/renew';
+    return 'https://radarshield.mooo.com/pay';
   }
 
   Future<void> _refreshSubscription() async {
@@ -1463,7 +1463,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
               ),
               _primaryButton(
                 'Продлить подписку',
-                () => globalState.openUrl(_renewUrl()),
+                () => globalState.openUrl(_payUrl()),
               ),
               const SizedBox(height: 12),
               GestureDetector(
