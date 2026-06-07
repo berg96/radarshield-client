@@ -6,6 +6,7 @@
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
+import 'package:fl_clash/plugins/app.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/views/proxies/common.dart' show delayTest;
@@ -34,7 +35,7 @@ class _RS {
 enum _PowerState { off, connecting, connected }
 
 // internal screen stack (our own, no FlClash nav)
-enum _RSView { home, settings, location, diagnostics, language }
+enum _RSView { home, settings, location, diagnostics, language, splitTunnel }
 
 class RadarShieldMainScreen extends ConsumerStatefulWidget {
   const RadarShieldMainScreen({super.key});
@@ -53,6 +54,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   // local-only UI toggles (visual; wiring to core behaviour comes later)
   bool _killSwitch = false;
   bool _statusNotif = true;
+  // lazily-loaded installed-app list for the split-tunnel screen
+  Future<List<Package>>? _packagesFuture;
 
   @override
   void initState() {
@@ -140,6 +143,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
         return _diagnosticsView();
       case _RSView.language:
         return _languageView();
+      case _RSView.splitTunnel:
+        return _splitTunnelView();
       case _RSView.home:
         return _homeView();
     }
@@ -840,11 +845,14 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     _settingRow(
                       icon: Icons.tune,
                       title: 'Раздельный туннель',
-                      sub: 'Какие приложения идут мимо VPN',
+                      sub: _splitTunnelLabel(),
                       trailing: _chevron,
-                      onTap: () => ref
-                          .read(currentPageLabelProvider.notifier)
-                          .toPage(PageLabel.tools),
+                      onTap: () {
+                        _packagesFuture ??= ref
+                            .read(systemActionProvider.notifier)
+                            .getPackages();
+                        _go(_RSView.splitTunnel);
+                      },
                     ),
                   ]),
                   _groupLabel('Приложение'),
@@ -1006,6 +1014,227 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SPLIT TUNNEL (real vpn.accessControlProps)
+  // ─────────────────────────────────────────────────────────────
+  String _splitTunnelLabel() {
+    final ac = ref.read(vpnSettingProvider).accessControlProps;
+    if (!ac.enable) return 'Выключен — весь трафик через VPN';
+    final n = ac.currentList.length;
+    final mode = ac.mode == AccessControlMode.acceptSelected
+        ? 'только выбранные'
+        : 'кроме выбранных';
+    return 'Включён · $n прил. · $mode';
+  }
+
+  void _toggleApp(String packageName) {
+    ref.read(vpnSettingProvider.notifier).update((s) {
+      final ac = s.accessControlProps;
+      final set = Set<String>.from(ac.currentList)..addOrRemove(packageName);
+      return s.copyWith(
+          accessControlProps: ac.copyWithNewList(set.toList()));
+    });
+  }
+
+  Widget _splitTunnelView() {
+    final ac = ref.watch(vpnSettingProvider.select((s) => s.accessControlProps));
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _subHeader('Раздельный туннель', () => _go(_RSView.settings)),
+            Expanded(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    child: _group([
+                      _settingRow(
+                        icon: Icons.alt_route,
+                        title: 'Раздельный туннель',
+                        sub: 'Часть приложений идёт мимо VPN',
+                        trailing: _rsToggle(
+                          ac.enable,
+                          () => ref
+                              .read(vpnSettingProvider.notifier)
+                              .update((s) => s.copyWith(
+                                  accessControlProps: s.accessControlProps
+                                      .copyWith(enable: !ac.enable))),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  if (ac.enable) ...[
+                    _modeSelector(ac.mode),
+                    Expanded(child: _appList(ac)),
+                  ] else
+                    const Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text(
+                            'Включите, чтобы выбрать приложения,\nкоторые ходят мимо VPN.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13.5, color: _RS.mute),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modeSelector(AccessControlMode mode) {
+    Widget chip(String label, AccessControlMode m) {
+      final on = mode == m;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => ref.read(vpnSettingProvider.notifier).update((s) =>
+              s.copyWith(
+                  accessControlProps:
+                      s.accessControlProps.copyWith(mode: m))),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: on ? _RS.amber.withValues(alpha: 0.16) : _RS.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: on ? _RS.amber : _RS.line),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.25,
+                color: on ? _RS.amber : _RS.dim,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+      child: Row(
+        children: [
+          chip('Только выбранные\nчерез VPN', AccessControlMode.acceptSelected),
+          chip('Выбранные\nмимо VPN', AccessControlMode.rejectSelected),
+        ],
+      ),
+    );
+  }
+
+  Widget _appList(AccessControlProps ac) {
+    return FutureBuilder<List<Package>>(
+      future: _packagesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: _RS.amber),
+          );
+        }
+        final packages = (snapshot.data ?? []).getViewList(
+          pinedList: const [],
+          sortType: AccessSortType.name,
+          isFilterSystemApp: ac.isFilterSystemApp,
+          isFilterNonInternetApp: ac.isFilterNonInternetApp,
+        );
+        if (packages.isEmpty) {
+          return const Center(
+            child: Text('Нет приложений',
+                style: TextStyle(color: _RS.mute, fontSize: 13)),
+          );
+        }
+        final selected = ac.currentList.toSet();
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 24),
+          itemCount: packages.length,
+          itemExtent: 64,
+          itemBuilder: (_, i) {
+            final p = packages[i];
+            final on = selected.contains(p.packageName);
+            return _appRow(p, on);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _appRow(Package p, bool on) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toggleApp(p.packageName),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 38,
+            height: 38,
+            child: FutureBuilder<ImageProvider?>(
+              future: app?.getPackageIcon(p.packageName),
+              builder: (_, snap) {
+                if (snap.data == null) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: _RS.panel2,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.android,
+                        size: 18, color: _RS.mute),
+                  );
+                }
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image(
+                      image: snap.data!,
+                      gaplessPlayback: true,
+                      width: 38,
+                      height: 38),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  p.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14.5,
+                      color: _RS.ink,
+                      fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  p.packageName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, color: _RS.mute),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          _rsToggle(on, () => _toggleApp(p.packageName)),
+        ],
       ),
     );
   }
