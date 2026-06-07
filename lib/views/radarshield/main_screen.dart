@@ -1354,6 +1354,20 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     });
   }
 
+  // Build the renewal page URL from the user's own bound subscription link, so
+  // the site already knows who they are. .../sub/<token> -> .../renew/<token>.
+  String _renewUrl() {
+    final url = ref.read(currentProfileProvider)?.url ?? '';
+    if (url.contains('/sub/')) {
+      return url.replaceFirst('/sub/', '/renew/');
+    }
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+      return '${uri.scheme}://${uri.host}/renew';
+    }
+    return 'https://radarshield.mooo.com/renew';
+  }
+
   Future<void> _refreshSubscription() async {
     final profile = ref.read(currentProfileProvider);
     if (profile == null || _refreshingSub) return;
@@ -1439,7 +1453,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        'Продлите подписку в Telegram-боте, затем обновите.',
+                        'Продлите подписку на сайте, затем обновите.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: _RS.mute, fontSize: 13),
                       ),
@@ -1448,8 +1462,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                 ),
               ),
               _primaryButton(
-                'Продлить в Telegram',
-                () => globalState.openUrl('https://t.me/radarshield_bot'),
+                'Продлить подписку',
+                () => globalState.openUrl(_renewUrl()),
               ),
               const SizedBox(height: 12),
               GestureDetector(
