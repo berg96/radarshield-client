@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Android-12 splash: brand-navy window with the centered shield, so there
+     is no white flash before Flutter draws its first frame. Android 12+ uses the
+     windowSplashScreen* items in values-v27/styles.xml instead. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/rs_navy" />
+    <item android:gravity="center" android:drawable="@drawable/rs_splash_logo" />
+</layer-list>

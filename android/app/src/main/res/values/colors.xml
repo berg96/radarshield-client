@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- RadarShield brand navy (matches _RS.navy in the Flutter UI). -->
+    <color name="rs_navy">#FF0D1B2A</color>
+</resources>

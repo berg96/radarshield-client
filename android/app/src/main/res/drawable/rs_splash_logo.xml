@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RadarShield shield mark — mirrors _LogoPainter (amber outline on transparent). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:pathData="M50,6 L88,24 L88,52 C88,74 72,90 50,95 C28,90 12,74 12,52 L12,24 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFB703"
+        android:strokeWidth="7"
+        android:strokeLineJoin="round" />
+</vector>
