@@ -35,7 +35,8 @@ _AppSettingProps _$AppSettingPropsFromJson(Map<String, dynamic> json) =>
           ) ??
           RestoreStrategy.compatible,
       showTrayTitle: json['showTrayTitle'] as bool? ?? true,
-      splitTunnelSeeded: json['splitTunnelSeeded'] as bool? ?? false,
+      splitTunnelSeedVersion:
+          (json['splitTunnelSeedVersion'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
@@ -62,7 +63,7 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'developerMode': instance.developerMode,
       'restoreStrategy': _$RestoreStrategyEnumMap[instance.restoreStrategy]!,
       'showTrayTitle': instance.showTrayTitle,
-      'splitTunnelSeeded': instance.splitTunnelSeeded,
+      'splitTunnelSeedVersion': instance.splitTunnelSeedVersion,
     };
 
 const _$RestoreStrategyEnumMap = {

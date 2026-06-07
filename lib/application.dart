@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/core/core.dart';
+import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/manager/hotkey_manager.dart';
 import 'package:fl_clash/manager/manager.dart';
@@ -60,25 +61,28 @@ class ApplicationState extends ConsumerState<Application> {
     });
   }
 
-  // RadarShield: one-time apply of the preconfigured RU split-tunnel to existing
-  // installs whose access-control is still untouched. Fresh installs already get
-  // it via defaultAccessControlProps; the flag makes this run at most once so we
-  // never clobber a user's own choice.
+  // RadarShield: apply the preconfigured RU split-tunnel. Additive — merges the
+  // current default packages into the user's reject-list and enables it, without
+  // removing the user's own picks. Re-runs when kSplitTunnelSeedVersion grows, so
+  // list corrections (e.g. a fixed package name) reach already-seeded installs.
   void _seedSplitTunnel() {
-    if (ref.read(appSettingProvider.select((s) => s.splitTunnelSeeded))) {
-      return;
-    }
+    final seeded =
+        ref.read(appSettingProvider.select((s) => s.splitTunnelSeedVersion));
+    if (seeded >= kSplitTunnelSeedVersion) return;
     final ac = ref.read(vpnSettingProvider).accessControlProps;
-    final untouched =
-        !ac.enable && ac.acceptList.isEmpty && ac.rejectList.isEmpty;
-    if (untouched) {
-      ref
-          .read(vpnSettingProvider.notifier)
-          .update((s) => s.copyWith(accessControlProps: defaultAccessControlProps));
-    }
-    ref
-        .read(appSettingProvider.notifier)
-        .update((s) => s.copyWith(splitTunnelSeeded: true));
+    final merged = <String>{...ac.rejectList, ...defaultBypassPackages}.toList();
+    ref.read(vpnSettingProvider.notifier).update(
+          (s) => s.copyWith(
+            accessControlProps: ac.copyWith(
+              enable: true,
+              mode: AccessControlMode.rejectSelected,
+              rejectList: merged,
+            ),
+          ),
+        );
+    ref.read(appSettingProvider.notifier).update(
+          (s) => s.copyWith(splitTunnelSeedVersion: kSplitTunnelSeedVersion),
+        );
   }
 
   void _initLink() {

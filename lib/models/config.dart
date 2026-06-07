@@ -38,6 +38,10 @@ const defaultWindowProps = WindowProps();
 // банк/гос-приложения активно режут VPN-IP, и доменных правил им мало.
 // Отсутствующий на телефоне пакет = no-op (безвреден). Список стартовый —
 // расширять/сверять по реальным дампам пакетов на устройстве.
+// Bump on every change to defaultBypassPackages so existing installs get the
+// new packages merged in (see _seedSplitTunnel in application.dart).
+const kSplitTunnelSeedVersion = 1;
+
 // Пакеты сверены по реальному устройству (скрины split-tunnel 2026-06-07).
 const defaultBypassPackages = <String>[
   // банки / финансы
@@ -53,7 +57,8 @@ const defaultBypassPackages = <String>[
   'ru.sravni.android.bankproduct', // Сравни
   'com.yandex.bank', // Яндекс Пэй
   'ru.nspk.mirpay', // Mir Pay
-  // госуслуги / гос (Госуслуги `ru.rostel…` — пакет обрезан на скрине, добавить вручную)
+  // госуслуги / гос
+  'ru.rostel', // Госуслуги (полный пакет, подтверждено Артёмом)
   'ru.gosuslugi.goskey', // Госключ
   'ru.gnivc.lkip', // ЛК ИП (ФНС)
   // соцсети / почта
@@ -139,9 +144,10 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool developerMode,
     @Default(RestoreStrategy.compatible) RestoreStrategy restoreStrategy,
     @Default(true) bool showTrayTitle,
-    // RadarShield: one-time seed of the preconfigured RU split-tunnel for
-    // existing installs (fresh installs already get it via the default).
-    @Default(false) bool splitTunnelSeeded,
+    // RadarShield: version of the preconfigured RU split-tunnel already applied
+    // to this install. When it's below kSplitTunnelSeedVersion the new default
+    // packages are merged in (additive — never removes the user's own picks).
+    @Default(0) int splitTunnelSeedVersion,
   }) = _AppSettingProps;
 
   factory AppSettingProps.fromJson(Map<String, Object?> json) =>
