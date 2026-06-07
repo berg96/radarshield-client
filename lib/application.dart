@@ -60,24 +60,8 @@ class ApplicationState extends ConsumerState<Application> {
 
   void _initLink() {
     linkManager.initAppLinksListen((url) async {
-      final res = await globalState.showMessage(
-        title: currentAppLocalizations.addProfile,
-        message: TextSpan(
-          children: [
-            TextSpan(text: currentAppLocalizations.doYouWantToPass),
-            TextSpan(
-              text: ' $url ',
-              style: TextStyle(
-                color: context.colorScheme.primary,
-                decoration: TextDecoration.underline,
-                decorationColor: context.colorScheme.primary,
-              ),
-            ),
-            TextSpan(text: currentAppLocalizations.createProfile),
-          ],
-        ),
-      );
-      if (res != true) return;
+      // RadarShield: following the subscription link already IS the intent to
+      // connect — import directly, no extra "do you want to add?" confirmation.
       ref.read(profilesActionProvider.notifier).addProfileFormURL(url);
     });
   }

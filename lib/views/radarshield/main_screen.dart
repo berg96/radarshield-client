@@ -516,11 +516,18 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
 
   Widget _onboardingView() {
     final filled = _subCtrl.text.trim().isNotEmpty;
+    final media = MediaQuery.of(context);
+    // Lift everything above the keyboard when it's open; otherwise clear the
+    // system navigation bar. (A bare Material has no Scaffold inset handling.)
+    final bottomInset = media.viewInsets.bottom > 0
+        ? media.viewInsets.bottom + 8
+        : media.viewPadding.bottom + 18;
     return Material(
       color: _RS.navy,
       child: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 26),
+          padding: EdgeInsets.fromLTRB(22, 18, 22, bottomInset),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -539,44 +546,54 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                 ],
               ),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: _RS.amber.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(18),
-                        border:
-                            Border.all(color: _RS.amber.withValues(alpha: 0.3)),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: _RS.amber.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                  color: _RS.amber.withValues(alpha: 0.3)),
+                            ),
+                            child: const Icon(Icons.link,
+                                color: _RS.amber, size: 26),
+                          ),
+                          const SizedBox(height: 22),
+                          const Text(
+                            'Вставьте ссылку\nподписки',
+                            style: TextStyle(
+                              color: _RS.ink,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Откройте нашего бота в Telegram и скопируйте '
+                            'ссылку. Вставьте её сюда — остальное сделаем сами.',
+                            style: TextStyle(
+                                color: _RS.dim, fontSize: 14.5, height: 1.5),
+                          ),
+                          const SizedBox(height: 26),
+                          _subInput(filled),
+                        ],
                       ),
-                      child: const Icon(Icons.link, color: _RS.amber, size: 26),
                     ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'Вставьте ссылку\nподписки',
-                      style: TextStyle(
-                        color: _RS.ink,
-                        fontSize: 25,
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Откройте нашего бота в Telegram и скопируйте ссылку. '
-                      'Вставьте её сюда — остальное сделаем сами.',
-                      style:
-                          TextStyle(color: _RS.dim, fontSize: 14.5, height: 1.5),
-                    ),
-                    const SizedBox(height: 26),
-                    _subInput(filled),
-                  ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 16),
               GestureDetector(
                 onTap: filled ? _addSub : null,
                 behavior: HitTestBehavior.opaque,

@@ -7,7 +7,7 @@ publish_to: 'none'
 #   versionCode = 1  (Android, after the +) — MUST only ever increase; bump by 1
 #                                             on every shipped build. See design/VERSIONING.md.
 # Pre-1.0 while our own UI is still being assembled.
-version: 0.4.0+7
+version: 0.4.1+8
 environment:
   sdk: '>=3.8.0 <4.0.0'
 
