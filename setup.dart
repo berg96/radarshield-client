@@ -161,7 +161,14 @@ Future<int> _package(
   final file = File(p.join(rootDir, 'env.json'));
 
   await file.writeAsString(
-    jsonEncode({'APP_ENV': env, 'CORE_SHA256': ?coreSha256}),
+    jsonEncode({
+      'APP_ENV': env,
+      'CORE_SHA256': ?coreSha256,
+      // RadarShield zero-config: a default subscription URL baked in at build
+      // time (kept out of source — supplied via the RS_DEFAULT_SUB env var /
+      // CI secret). Empty when unset → app falls back to manual onboarding.
+      'RS_DEFAULT_SUB': Platform.environment['RS_DEFAULT_SUB'] ?? '',
+    }),
   );
 
   final flutterBuildArgs = createFlutterBuildArgs(

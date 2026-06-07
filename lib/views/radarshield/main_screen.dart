@@ -59,6 +59,10 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   // guards a one-shot disconnect when the subscription turns out expired
   bool _stoppedForExpiry = false;
   bool _refreshingSub = false;
+  // zero-config: a default subscription URL baked in at build time (see
+  // setup.dart / env.json). Empty when unset → manual onboarding.
+  static const _defaultSub = String.fromEnvironment('RS_DEFAULT_SUB');
+  bool _autoImportTried = false;
 
   @override
   void initState() {
@@ -133,6 +137,18 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
         ref.watch(profilesProvider.select((state) => state.isNotEmpty));
 
     if (!hasProfile) {
+      // Zero-config: if a default sub is baked in, import it once and show a
+      // brief bootstrap screen. On failure (network) we fall through to manual
+      // onboarding so the user is never stuck.
+      if (_defaultSub.isNotEmpty && !_autoImportTried) {
+        _autoImportTried = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(profilesActionProvider.notifier).addProfileFormURL(
+                _defaultSub,
+              );
+        });
+        return _bootstrapView();
+      }
       _view = _RSView.home;
       return _onboardingView();
     }
@@ -459,6 +475,45 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   // ─────────────────────────────────────────────────────────────
   // ONBOARDING
   // ─────────────────────────────────────────────────────────────
+  // Brief branded loader shown while the baked-in subscription is imported.
+  Widget _bootstrapView() {
+    return const Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _Logo(size: 56),
+              SizedBox(height: 22),
+              Text(
+                'RadarShield',
+                style: TextStyle(
+                  color: _RS.ink,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              SizedBox(height: 26),
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: _RS.amber),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Настраиваем подключение…',
+                style: TextStyle(color: _RS.mute, fontSize: 13.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _onboardingView() {
     final filled = _subCtrl.text.trim().isNotEmpty;
     return Material(

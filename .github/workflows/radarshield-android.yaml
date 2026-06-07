@@ -74,6 +74,10 @@ jobs:
       - name: Build
         # arm64-v8a only: that's what every modern phone uses, and it ~3x's the
         # Go-core build (1 ABI instead of 3) — faster + far less disk for a test APK.
+        # RS_DEFAULT_SUB (optional repo secret) bakes in a zero-config subscription
+        # URL via env.json/dart-define; unset → app shows manual onboarding.
+        env:
+          RS_DEFAULT_SUB: ${{ secrets.RS_DEFAULT_SUB }}
         run: dart setup.dart android --arch arm64 -v
 
       - name: Upload APK
