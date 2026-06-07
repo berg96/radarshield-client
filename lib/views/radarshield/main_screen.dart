@@ -56,6 +56,9 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
   bool _statusNotif = true;
   // lazily-loaded installed-app list for the split-tunnel screen
   Future<List<Package>>? _packagesFuture;
+  // guards a one-shot disconnect when the subscription turns out expired
+  bool _stoppedForExpiry = false;
+  bool _refreshingSub = false;
 
   @override
   void initState() {
@@ -133,6 +136,13 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
       _view = _RSView.home;
       return _onboardingView();
     }
+
+    final info = ref.watch(currentProfileProvider)?.subscriptionInfo;
+    if (_isExpired(info)) {
+      _ensureStoppedForExpiry();
+      return _expiredView(info!);
+    }
+    _stoppedForExpiry = false;
 
     switch (_view) {
       case _RSView.settings:
@@ -698,6 +708,30 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     );
   }
 
+  Widget _primaryButton(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _RS.amber,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: _RS.navy,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _settingRow({
     required IconData icon,
     required String title,
@@ -1235,6 +1269,169 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
           const SizedBox(width: 10),
           _rsToggle(on, () => _toggleApp(p.packageName)),
         ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // EXPIRED GATE (real SubscriptionInfo)
+  // ─────────────────────────────────────────────────────────────
+  bool _isExpired(SubscriptionInfo? info) {
+    if (info == null) return false;
+    final nowS = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final timeUp = info.expire > 0 && nowS >= info.expire;
+    final dataUp = info.total > 0 && (info.upload + info.download) >= info.total;
+    return timeUp || dataUp;
+  }
+
+  void _ensureStoppedForExpiry() {
+    if (_stoppedForExpiry) return;
+    _stoppedForExpiry = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(isStartProvider)) {
+        ref.read(setupActionProvider.notifier).updateStatus(false);
+      }
+    });
+  }
+
+  Future<void> _refreshSubscription() async {
+    final profile = ref.read(currentProfileProvider);
+    if (profile == null || _refreshingSub) return;
+    setState(() => _refreshingSub = true);
+    try {
+      await ref
+          .read(profilesActionProvider.notifier)
+          .updateProfile(profile, showLoading: false);
+    } catch (_) {
+      globalState.showMessage(
+        message: const TextSpan(text: 'Не удалось обновить — проверьте сеть'),
+      );
+    } finally {
+      if (mounted) setState(() => _refreshingSub = false);
+    }
+  }
+
+  Widget _expiredView(SubscriptionInfo info) {
+    final nowS = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final timeUp = info.expire > 0 && nowS >= info.expire;
+    final title = timeUp ? 'Подписка истекла' : 'Трафик исчерпан';
+    final detail = timeUp
+        ? (info.expire > 0 ? 'Действовала до ${_fmtDate(info.expire)}' : '')
+        : 'Использовано ${(info.upload + info.download).traffic.show}'
+            ' из ${info.total.traffic.show}';
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          child: Column(
+            children: [
+              const Row(
+                children: [
+                  _Logo(size: 24),
+                  SizedBox(width: 9),
+                  Text(
+                    'RadarShield',
+                    style: TextStyle(
+                      color: _RS.ink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        color: _RS.amber.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        timeUp ? Icons.timer_off_outlined : Icons.data_usage,
+                        color: _RS.amber,
+                        size: 40,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: _RS.ink,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (detail.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        detail,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: _RS.dim, fontSize: 13.5),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'Продлите подписку в Telegram-боте, затем обновите.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: _RS.mute, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _primaryButton(
+                'Продлить в Telegram',
+                () => globalState.openUrl('https://t.me/radarshield_bot'),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _refreshingSub ? null : _refreshSubscription,
+                child: Container(
+                  width: double.infinity,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _RS.panel,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _RS.line2),
+                  ),
+                  child: _refreshingSub
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2.2, color: _RS.amber),
+                        )
+                      : const Text(
+                          'Я продлил — обновить',
+                          style: TextStyle(
+                            color: _RS.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: _confirmLogout,
+                child: const Text(
+                  'Сменить подписку',
+                  style: TextStyle(color: _RS.mute, fontSize: 13.5),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
