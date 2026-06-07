@@ -34,7 +34,7 @@ class _RS {
 enum _PowerState { off, connecting, connected }
 
 // internal screen stack (our own, no FlClash nav)
-enum _RSView { home, settings, location, diagnostics }
+enum _RSView { home, settings, location, diagnostics, language }
 
 class RadarShieldMainScreen extends ConsumerStatefulWidget {
   const RadarShieldMainScreen({super.key});
@@ -51,7 +51,6 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
 
   _RSView _view = _RSView.home;
   // local-only UI toggles (visual; wiring to core behaviour comes later)
-  bool _autoConnect = false;
   bool _killSwitch = false;
   bool _statusNotif = true;
 
@@ -139,6 +138,8 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
         return _locationView();
       case _RSView.diagnostics:
         return _diagnosticsView();
+      case _RSView.language:
+        return _languageView();
       case _RSView.home:
         return _homeView();
     }
@@ -796,6 +797,7 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
     final profile = ref.watch(currentProfileProvider);
     final info = profile?.subscriptionInfo;
     final locale = ref.watch(appSettingProvider).locale;
+    final autoRun = ref.watch(appSettingProvider.select((s) => s.autoRun));
     final pkg = globalState.packageInfo;
 
     return Material(
@@ -823,7 +825,10 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                       title: 'Автоподключение',
                       sub: 'При запуске приложения',
                       trailing: _rsToggle(
-                          _autoConnect, () => setState(() => _autoConnect = !_autoConnect)),
+                          autoRun,
+                          () => ref
+                              .read(appSettingProvider.notifier)
+                              .update((s) => s.copyWith(autoRun: !autoRun))),
                     ),
                     _settingRow(
                       icon: Icons.shield_outlined,
@@ -854,13 +859,9 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
                     _settingRow(
                       icon: Icons.language,
                       title: 'Язык',
-                      sub: (locale == null || locale.isEmpty)
-                          ? 'Системный'
-                          : locale,
+                      sub: _localeLabel(locale),
                       trailing: _chevron,
-                      onTap: () => ref
-                          .read(currentPageLabelProvider.notifier)
-                          .toPage(PageLabel.tools),
+                      onTap: () => _go(_RSView.language),
                     ),
                     _settingRow(
                       icon: Icons.troubleshoot,
@@ -941,6 +942,70 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LANGUAGE (real appSetting.locale)
+  // ─────────────────────────────────────────────────────────────
+  // null = follow system; otherwise a locale code stored verbatim.
+  static const _localeOptions = <String?>[null, 'ru', 'en'];
+
+  String _localeLabel(String? code) {
+    switch (code) {
+      case null:
+      case '':
+        return 'Системный';
+      case 'ru':
+        return 'Русский';
+      case 'en':
+        return 'English';
+      default:
+        return code;
+    }
+  }
+
+  Widget _languageView() {
+    final current = ref.watch(appSettingProvider.select((s) => s.locale));
+    return Material(
+      color: _RS.navy,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _subHeader('Язык', () => _go(_RSView.settings)),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                children: [
+                  _groupLabel('Язык интерфейса'),
+                  _group([
+                    for (final code in _localeOptions)
+                      _settingRow(
+                        icon: code == null
+                            ? Icons.smartphone
+                            : Icons.translate,
+                        title: _localeLabel(code),
+                        trailing: ((current ?? '') == (code ?? ''))
+                            ? const Icon(Icons.check, color: _RS.amber, size: 20)
+                            : null,
+                        onTap: () => ref
+                            .read(appSettingProvider.notifier)
+                            .update((s) => s.copyWith(locale: code)),
+                      ),
+                  ]),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(4, 14, 4, 0),
+                    child: Text(
+                      'Системный — приложение следует языку телефона.',
+                      style: TextStyle(fontSize: 12.5, color: _RS.mute),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
