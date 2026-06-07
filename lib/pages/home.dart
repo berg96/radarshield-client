@@ -72,7 +72,12 @@ class HomePage extends StatelessWidget {
                         flex: 1,
                         child: MediaQuery.removePadding(
                           removeTop: false,
-                          removeBottom: true,
+                          // On the dashboard the FlClash bottom navbar is hidden,
+                          // so KEEP the bottom inset — otherwise our content
+                          // (e.g. onboarding's footer) draws under the system
+                          // navigation bar. Only strip it when the navbar is
+                          // shown and already occupies that space.
+                          removeBottom: !onDashboard,
                           removeLeft: true,
                           removeRight: true,
                           context: context,

@@ -38,33 +38,48 @@ const defaultWindowProps = WindowProps();
 // банк/гос-приложения активно режут VPN-IP, и доменных правил им мало.
 // Отсутствующий на телефоне пакет = no-op (безвреден). Список стартовый —
 // расширять/сверять по реальным дампам пакетов на устройстве.
+// Пакеты сверены по реальному устройству (скрины split-tunnel 2026-06-07).
 const defaultBypassPackages = <String>[
-  // банки
-  'ru.sberbankmobile', // Сбербанк Онлайн
-  'com.idamob.tinkoff.android', // Т-Банк (Тинькофф)
-  'ru.vtb24.mobilebanking.android', // ВТБ Онлайн
+  // банки / финансы
+  'ru.sberbankmobile', // СберБанк
+  'ru.sberbank_sbbol', // СберБизнес
+  'com.idamob.tinkoff.android', // Т-Банк
+  'ru.tinkoff.investing', // Т-Инвестиции
+  'ru.vtb24.mobilebanking.android', // ВТБ
   'ru.alfabank.mobile.android', // Альфа-Банк
+  'ru.alfabank.oavdo.amc', // Альфа Бизнес
+  'ru.otpbank.mobile', // ОТП Банк
   'ru.gazprombank.android.mobilebank.app', // Газпромбанк
-  'ru.raiffeisennews', // Райффайзен
-  // платежи / госуслуги (пакеты сверить на устройстве)
+  'ru.sravni.android.bankproduct', // Сравни
+  'com.yandex.bank', // Яндекс Пэй
   'ru.nspk.mirpay', // Mir Pay
-  'ru.gosuslugi.app', // Госуслуги
-  'ru.fns.billingnalog', // Налоги ФЛ (ФНС)
+  // госуслуги / гос (Госуслуги `ru.rostel…` — пакет обрезан на скрине, добавить вручную)
+  'ru.gosuslugi.goskey', // Госключ
+  'ru.gnivc.lkip', // ЛК ИП (ФНС)
   // соцсети / почта
   'com.vkontakte.android', // VK
-  'com.vk.im', // VK Мессенджер
+  'com.vk.vkvideo', // VK Видео
   'ru.ok.android', // Одноклассники
   'ru.mail.mailapp', // Почта Mail.ru
-  // маркетплейсы
+  // маркетплейсы / ритейл
   'ru.ozon.app.android', // Ozon
   'com.wildberries.ru', // Wildberries
-  'com.avito.android', // Avito
-  // Яндекс
-  'ru.yandex.searchplugin', // Яндекс (с Алисой)
+  'com.avito.android', // Авито
+  'ru.pyaterochka.app.browser', // Пятёрочка
+  // Яндекс / RU-геофенс
+  'com.yandex.aliceapp', // Алиса
+  'ru.yandex.searchplugin', // Яндекс
   'ru.yandex.taxi', // Яндекс Go
   'ru.yandex.yandexmaps', // Яндекс Карты
   'ru.yandex.music', // Яндекс Музыка
+  'ru.yandex.mail', // Яндекс Почта
   'ru.kinopoisk', // Кинопоиск
+  // телеком
+  'ru.megafon.mlk', // МегаФон
+  'com.dartit.RTcabinet', // Мой Ростелеком
+  // медиа
+  'ru.ivi.client', // Иви
+  'ru.rutube.app', // RUTUBE
 ];
 
 // Преднастроенный split-tunnel: включён, режим «выбранные мимо VPN»,
@@ -124,6 +139,9 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool developerMode,
     @Default(RestoreStrategy.compatible) RestoreStrategy restoreStrategy,
     @Default(true) bool showTrayTitle,
+    // RadarShield: one-time seed of the preconfigured RU split-tunnel for
+    // existing installs (fresh installs already get it via the default).
+    @Default(false) bool splitTunnelSeeded,
   }) = _AppSettingProps;
 
   factory AppSettingProps.fromJson(Map<String, Object?> json) =>

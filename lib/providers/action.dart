@@ -930,7 +930,10 @@ class ProfilesAction extends _$ProfilesAction {
     if (globalState.navigatorKey.currentState?.canPop() ?? false) {
       globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     }
-    ref.read(currentPageLabelProvider.notifier).value = PageLabel.profiles;
+    // RadarShield: keep the user on our full-screen dashboard (the loadingRun
+    // overlay is the spinner) instead of dropping them onto the stock FlClash
+    // "Profiles" page after a deep-link / paste import.
+    ref.read(currentPageLabelProvider.notifier).value = PageLabel.dashboard;
     final profile = await globalState.loadingRun(
       tag: LoadingTag.profiles,
       () async {

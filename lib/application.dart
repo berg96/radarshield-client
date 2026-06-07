@@ -7,6 +7,7 @@ import 'package:fl_clash/core/core.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/manager/hotkey_manager.dart';
 import 'package:fl_clash/manager/manager.dart';
+import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/plugins/app.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
@@ -54,8 +55,30 @@ class ApplicationState extends ConsumerState<Application> {
       }
       _autoUpdateProfilesTask();
       _initLink();
+      _seedSplitTunnel();
       app?.initShortcuts();
     });
+  }
+
+  // RadarShield: one-time apply of the preconfigured RU split-tunnel to existing
+  // installs whose access-control is still untouched. Fresh installs already get
+  // it via defaultAccessControlProps; the flag makes this run at most once so we
+  // never clobber a user's own choice.
+  void _seedSplitTunnel() {
+    if (ref.read(appSettingProvider.select((s) => s.splitTunnelSeeded))) {
+      return;
+    }
+    final ac = ref.read(vpnSettingProvider).accessControlProps;
+    final untouched =
+        !ac.enable && ac.acceptList.isEmpty && ac.rejectList.isEmpty;
+    if (untouched) {
+      ref
+          .read(vpnSettingProvider.notifier)
+          .update((s) => s.copyWith(accessControlProps: defaultAccessControlProps));
+    }
+    ref
+        .read(appSettingProvider.notifier)
+        .update((s) => s.copyWith(splitTunnelSeeded: true));
   }
 
   void _initLink() {

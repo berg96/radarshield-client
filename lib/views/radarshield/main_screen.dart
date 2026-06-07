@@ -516,18 +516,15 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
 
   Widget _onboardingView() {
     final filled = _subCtrl.text.trim().isNotEmpty;
-    final media = MediaQuery.of(context);
-    // Lift everything above the keyboard when it's open; otherwise clear the
-    // system navigation bar. (A bare Material has no Scaffold inset handling.)
-    final bottomInset = media.viewInsets.bottom > 0
-        ? media.viewInsets.bottom + 8
-        : media.viewPadding.bottom + 18;
+    // SafeArea reserves the system navigation bar (home.dart keeps the bottom
+    // inset on the dashboard); add the keyboard inset so the paste field and
+    // footer lift above the keyboard when it opens.
+    final keyboard = MediaQuery.of(context).viewInsets.bottom;
     return Material(
       color: _RS.navy,
       child: SafeArea(
-        bottom: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(22, 18, 22, bottomInset),
+          padding: EdgeInsets.fromLTRB(22, 18, 22, 18 + keyboard),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -626,12 +623,12 @@ class _RadarShieldMainScreenState extends ConsumerState<RadarShieldMainScreen>
               const SizedBox(height: 14),
               GestureDetector(
                 onTap: () => ref
-                    .read(currentPageLabelProvider.notifier)
-                    .toPage(PageLabel.profiles),
+                    .read(profilesActionProvider.notifier)
+                    .addProfileFormQrCode(),
                 behavior: HitTestBehavior.opaque,
                 child: const Center(
                   child: Text(
-                    'Ввести вручную или по QR →',
+                    'Сканировать QR-код →',
                     style: TextStyle(
                       color: _RS.mute,
                       fontSize: 13,
