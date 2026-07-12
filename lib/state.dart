@@ -27,6 +27,7 @@ class GlobalState {
   bool isPre = true;
   late final String coreSHA256;
   late final PackageInfo packageInfo;
+  late final DeviceIdentity deviceIdentity;
   Function? updateCurrentDelayDebounce;
   late Measure measure;
   late CommonTheme theme;
@@ -82,6 +83,7 @@ class GlobalState {
     );
     final appStateOverrides = buildAppStateOverrides(appState);
     packageInfo = await PackageInfo.fromPlatform();
+    deviceIdentity = await loadDeviceIdentity();
     final configMap = await preferences.getConfigMap();
     final config = await migration.migrationIfNeeded(
       configMap,

@@ -85,6 +85,16 @@ class Preferences {
     return preferences?.setString(configKey, json.encode(config)) ?? false;
   }
 
+  Future<String?> getHwid() async {
+    final preferences = await sharedPreferencesCompleter.future;
+    return preferences?.getString(hwidKey);
+  }
+
+  Future<void> setHwid(String hwid) async {
+    final preferences = await sharedPreferencesCompleter.future;
+    await preferences?.setString(hwidKey, hwid);
+  }
+
   Future<void> clearPreferences() async {
     final sharedPreferencesIns = await sharedPreferencesCompleter.future;
     await sharedPreferencesIns?.clear();

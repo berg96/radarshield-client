@@ -31,11 +31,16 @@ class Request {
     );
   }
 
+  /// Единственный путь загрузки подписки (Profile.update). Кроме UA шлём
+  /// device-id — по нему панель и наш лендинг считают устройства на подписку.
   Future<Response<Uint8List>> getFileResponseForUrl(String url) async {
     try {
       return await _clashDio.get<Uint8List>(
         url,
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: globalState.deviceIdentity.headers,
+        ),
       );
     } catch (e) {
       commonPrint.log('getFileResponseForUrl error ${e.toString()}');
