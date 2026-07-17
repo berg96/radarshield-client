@@ -40,7 +40,7 @@ const defaultWindowProps = WindowProps();
 // расширять/сверять по реальным дампам пакетов на устройстве.
 // Bump on every change to defaultBypassPackages so existing installs get the
 // new packages merged in (see _seedSplitTunnel in application.dart).
-const kSplitTunnelSeedVersion = 1;
+const kSplitTunnelSeedVersion = 2;
 
 // Пакеты сверены по реальному устройству (скрины split-tunnel 2026-06-07).
 const defaultBypassPackages = <String>[
@@ -64,6 +64,9 @@ const defaultBypassPackages = <String>[
   // соцсети / почта
   'com.vkontakte.android', // VK
   'com.vk.vkvideo', // VK Видео
+  'ru.oneme.app', // MAX (мессенджер VK) — определяет внешний IP через иностранные
+  //                серверы, через VPN видит зарубежный exit → ломается геологика;
+  //                домены .ru уже DIRECT, лечит только app-bypass
   'ru.ok.android', // Одноклассники
   'ru.mail.mailapp', // Почта Mail.ru
   // маркетплейсы / ритейл
